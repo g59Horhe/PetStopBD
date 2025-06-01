@@ -1,7 +1,13 @@
 <?php
 // AJAX endpoint to get breeds for a specific pet type
-require_once '../config/db_connect.php';
+require_once '../includes/auth_functions.php';
+session_start();
 
+if (!is_logged_in()) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Unauthorized']);
+    exit();
+}
 header('Content-Type: application/json');
 
 if (isset($_GET['pet_type_id']) && is_numeric($_GET['pet_type_id'])) {

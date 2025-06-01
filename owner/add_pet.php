@@ -147,7 +147,7 @@ include '../includes/header.php';
                             <h3 class="section-title">
                                 <i class="fas fa-camera me-2"></i>Pet Photo
                             </h3>
-                            <div class="photo-upload-area">
+                            <div class="photo-upload-container">
                                 <div class="photo-preview" id="photoPreview">
                                     <div class="upload-placeholder">
                                         <i class="fas fa-camera fa-2x"></i>
@@ -155,7 +155,7 @@ include '../includes/header.php';
                                         <small>JPG, PNG, or GIF (max 5MB)</small>
                                     </div>
                                 </div>
-                                <input type="file" name="profile_image" id="profileImage" accept="image/*" class="photo-input">
+                                <input type="file" name="profile_image" id="profileImage" accept="image/*" class="photo-input" style="display: none;">
                             </div>
                         </div>
 
@@ -391,8 +391,8 @@ include '../includes/header.php';
     color: #667eea;
 }
 
-/* Photo Upload */
-.photo-upload-area {
+/* Photo Upload - FIXED VERSION */
+.photo-upload-container {
     text-align: center;
     margin-bottom: 1rem;
 }
@@ -410,6 +410,7 @@ include '../includes/header.php';
     transition: all 0.3s ease;
     position: relative;
     overflow: hidden;
+    background: #f8fafc;
 }
 
 .photo-preview:hover {
@@ -425,6 +426,7 @@ include '../includes/header.php';
 .upload-placeholder {
     text-align: center;
     color: #718096;
+    pointer-events: none;
 }
 
 .upload-placeholder p {
@@ -438,11 +440,8 @@ include '../includes/header.php';
 }
 
 .photo-input {
-    position: absolute;
-    opacity: 0;
-    width: 100%;
-    height: 100%;
-    cursor: pointer;
+    /* Hidden input - no positioning issues */
+    display: none;
 }
 
 .photo-preview img {
@@ -551,7 +550,7 @@ textarea.form-control {
 </style>
 
 <script>
-// Photo upload preview
+// Photo upload preview - FIXED VERSION
 document.getElementById('profileImage').addEventListener('change', function(e) {
     const file = e.target.files[0];
     const preview = document.getElementById('photoPreview');
@@ -566,8 +565,10 @@ document.getElementById('profileImage').addEventListener('change', function(e) {
     }
 });
 
-// Make photo preview clickable
-document.getElementById('photoPreview').addEventListener('click', function() {
+// Make photo preview clickable - FIXED
+document.getElementById('photoPreview').addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
     document.getElementById('profileImage').click();
 });
 
@@ -642,6 +643,17 @@ document.getElementById('pet_type_id').addEventListener('change', function() {
     if (this.value) {
         this.classList.remove('is-invalid');
     }
+});
+
+// Prevent form elements from triggering file upload
+document.querySelectorAll('select, input[type="text"], input[type="number"], input[type="date"], textarea').forEach(element => {
+    element.addEventListener('click', function(e) {
+        e.stopPropagation();
+    });
+    
+    element.addEventListener('focus', function(e) {
+        e.stopPropagation();
+    });
 });
 </script>
 

@@ -25,7 +25,8 @@ $pets_query = "SELECT p.*, pt.name as pet_type, pt.icon as type_icon, pb.name as
 $pets_stmt = $conn->prepare($pets_query);
 $pets_stmt->bind_param("i", $user_id);
 $pets_stmt->execute();
-$pets = $pets_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$pets_result = $pets_stmt->get_result();
+$pets = $pets_result->fetch_all(MYSQLI_ASSOC);
 
 // Get total pet count
 $total_pets = count($pets);
@@ -40,9 +41,10 @@ $upcoming_query = "SELECT mr.*, p.name as pet_name, p.profile_image, pt.icon as 
 $upcoming_stmt = $conn->prepare($upcoming_query);
 $upcoming_stmt->bind_param("i", $user_id);
 $upcoming_stmt->execute();
-$upcoming_appointments = $upcoming_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$upcoming_result = $upcoming_stmt->get_result();
+$upcoming_appointments = $upcoming_result->fetch_all(MYSQLI_ASSOC);
 
-// Get recent medical records (last 10)
+// Get recent medical records (last 5)
 $recent_query = "SELECT mr.*, p.name as pet_name, pt.icon as type_icon
                  FROM medical_records mr 
                  JOIN pet_profiles p ON mr.pet_id = p.id
@@ -52,15 +54,33 @@ $recent_query = "SELECT mr.*, p.name as pet_name, pt.icon as type_icon
 $recent_stmt = $conn->prepare($recent_query);
 $recent_stmt->bind_param("i", $user_id);
 $recent_stmt->execute();
-$recent_records = $recent_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+$recent_result = $recent_stmt->get_result();
+$recent_records = $recent_result->fetch_all(MYSQLI_ASSOC);
 
-// Calculate statistics
-$vaccination_count = 0;
-$checkup_count = 0;
-foreach ($recent_records as $record) {
-    if ($record['record_type'] == 'vaccination') $vaccination_count++;
-    if ($record['record_type'] == 'checkup') $checkup_count++;
-}
+// Calculate vaccination statistics (all time)
+$vaccination_query = "SELECT COUNT(*) as count FROM medical_records mr 
+                     JOIN pet_profiles p ON mr.pet_id = p.id 
+                     WHERE p.user_id = ? AND mr.record_type = 'vaccination'";
+$vaccination_stmt = $conn->prepare($vaccination_query);
+$vaccination_stmt->bind_param("i", $user_id);
+$vaccination_stmt->execute();
+$vaccination_result = $vaccination_stmt->get_result();
+$vaccination_row = $vaccination_result->fetch_assoc();
+$vaccination_count = (int)$vaccination_row['count'];
+
+// Calculate checkup statistics (all time)
+$checkup_query = "SELECT COUNT(*) as count FROM medical_records mr 
+                 JOIN pet_profiles p ON mr.pet_id = p.id 
+                 WHERE p.user_id = ? AND mr.record_type = 'checkup'";
+$checkup_stmt = $conn->prepare($checkup_query);
+$checkup_stmt->bind_param("i", $user_id);
+$checkup_stmt->execute();
+$checkup_result = $checkup_stmt->get_result();
+$checkup_row = $checkup_result->fetch_assoc();
+$checkup_count = (int)$checkup_row['count'];
+
+// Get total upcoming appointments count
+$upcoming_count = count($upcoming_appointments);
 
 // Include header
 include '../includes/header.php';
@@ -108,7 +128,7 @@ include '../includes/header.php';
                             <i class="fas fa-calendar-exclamation"></i>
                         </div>
                         <div class="stat-content">
-                            <h3 class="stat-number"><?php echo count($upcoming_appointments); ?></h3>
+                            <h3 class="stat-number"><?php echo $upcoming_count; ?></h3>
                             <p class="stat-label">Upcoming Appointments</p>
                         </div>
                     </div>
@@ -121,7 +141,7 @@ include '../includes/header.php';
                         </div>
                         <div class="stat-content">
                             <h3 class="stat-number"><?php echo $vaccination_count; ?></h3>
-                            <p class="stat-label">Recent Vaccinations</p>
+                            <p class="stat-label">Total Vaccinations</p>
                         </div>
                     </div>
                 </div>
@@ -133,7 +153,7 @@ include '../includes/header.php';
                         </div>
                         <div class="stat-content">
                             <h3 class="stat-number"><?php echo $checkup_count; ?></h3>
-                            <p class="stat-label">Recent Checkups</p>
+                            <p class="stat-label">Total Checkups</p>
                         </div>
                     </div>
                 </div>
@@ -242,6 +262,7 @@ include '../includes/header.php';
                                 <div class="text-center text-muted py-3">
                                     <i class="fas fa-calendar-check fa-2x mb-2"></i>
                                     <p>No upcoming appointments</p>
+                                    <small>Add medical records with future due dates to see upcoming appointments</small>
                                 </div>
                             <?php else: ?>
                                 <div class="appointments-list">
@@ -277,6 +298,7 @@ include '../includes/header.php';
                                 <div class="text-center text-muted py-3">
                                     <i class="fas fa-file-medical fa-2x mb-2"></i>
                                     <p>No medical records yet</p>
+                                    <small>Start by adding your first pet and then add medical records</small>
                                 </div>
                             <?php else: ?>
                                 <div class="records-list">
@@ -309,6 +331,40 @@ include '../includes/header.php';
             </div>
         </div>
     </section>
+
+    <!-- Quick Actions -->
+    <?php if (!empty($pets)): ?>
+    <section class="quick-actions py-4">
+        <div class="container">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <a href="add_pet.php" class="quick-action-card">
+                        <i class="fas fa-plus-circle"></i>
+                        <span>Add New Pet</span>
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="my_pets.php" class="quick-action-card">
+                        <i class="fas fa-list"></i>
+                        <span>View All Pets</span>
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="pet_medical.php?id=<?php echo $pets[0]['id']; ?>" class="quick-action-card">
+                        <i class="fas fa-file-medical"></i>
+                        <span>Add Medical Record</span>
+                    </a>
+                </div>
+                <div class="col-md-3">
+                    <a href="#" class="quick-action-card" onclick="alert('Search feature coming soon!')">
+                        <i class="fas fa-search"></i>
+                        <span>Search Records</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+    <?php endif; ?>
 </div>
 
 <style>
@@ -408,7 +464,7 @@ include '../includes/header.php';
     padding: 1.5rem 2rem;
     border-bottom: 1px solid #f1f5f9;
     display: flex;
-    justify-content: between;
+    justify-content: space-between;
     align-items: center;
 }
 
@@ -597,6 +653,44 @@ include '../includes/header.php';
     font-size: 0.8rem;
     color: #a0aec0;
     margin: 0;
+}
+
+/* Quick Actions */
+.quick-actions {
+    background: transparent;
+}
+
+.quick-action-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: white;
+    border-radius: 12px;
+    padding: 2rem 1rem;
+    text-decoration: none;
+    color: #2d3748;
+    transition: all 0.3s ease;
+    border: 1px solid #f1f5f9;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.quick-action-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    color: #667eea;
+    text-decoration: none;
+}
+
+.quick-action-card i {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+    color: #667eea;
+}
+
+.quick-action-card span {
+    font-weight: 600;
+    font-size: 0.9rem;
 }
 
 /* Responsive Design */
