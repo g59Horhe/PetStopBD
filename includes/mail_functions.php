@@ -162,8 +162,6 @@ function send_email_phpmailer($to, $subject, $message) {
         $mail->isSMTP();
         $mail->Host       = 'smtp.gmail.com';
         $mail->SMTPAuth   = true;
-        $mail->Username   = 'sujoydessa@gmail.com';  // YOUR GMAIL ADDRESS
-        $mail->Password   = 'muke scxk wriy tddq';     // YOUR APP PASSWORD
         $mail->SMTPSecure = 'tls';
         $mail->Port       = 587;
         
