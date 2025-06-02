@@ -1,5 +1,5 @@
 <?php
-// Pet Medical Records - Comprehensive medical management for pets
+// Pet Medical Records - Comprehensive medical management for pets with EDIT functionality
 require_once '../config/db_connect.php';
 require_once '../includes/auth_functions.php';
 
@@ -75,18 +75,78 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
     }
     
+    // Handle editing medical record
+    if (isset($_POST['edit_record'])) {
+        $record_id = (int)$_POST['record_id'];
+        $record_type = trim($_POST['edit_record_type']);
+        $title = trim($_POST['edit_title']);
+        $description = trim($_POST['edit_description']);
+        $date_performed = $_POST['edit_date_performed'];
+        $veterinarian_name = trim($_POST['edit_veterinarian_name']);
+        $clinic_name = trim($_POST['edit_clinic_name']);
+        $cost = !empty($_POST['edit_cost']) ? (float)$_POST['edit_cost'] : null;
+        $next_due_date = !empty($_POST['edit_next_due_date']) ? $_POST['edit_next_due_date'] : null;
+        $notes = trim($_POST['edit_notes']);
+        
+        if (!empty($title) && !empty($record_type) && !empty($date_performed) && $record_id > 0) {
+            // Verify that this record belongs to the current user's pet
+            $verify_query = "SELECT mr.id FROM medical_records mr 
+                            JOIN pet_profiles p ON mr.pet_id = p.id 
+                            WHERE mr.id = ? AND p.user_id = ?";
+            $verify_stmt = $conn->prepare($verify_query);
+            $verify_stmt->bind_param("ii", $record_id, $user_id);
+            $verify_stmt->execute();
+            $verify_result = $verify_stmt->get_result();
+            
+            if ($verify_result->num_rows > 0) {
+                $update_query = "UPDATE medical_records SET 
+                                record_type = ?, title = ?, description = ?, date_performed = ?, 
+                                veterinarian_name = ?, clinic_name = ?, cost = ?, next_due_date = ?, notes = ?,
+                                updated_at = CURRENT_TIMESTAMP
+                                WHERE id = ?";
+                
+                $update_stmt = $conn->prepare($update_query);
+                $update_stmt->bind_param("ssssssdssi", $record_type, $title, $description, $date_performed, 
+                                       $veterinarian_name, $clinic_name, $cost, $next_due_date, $notes, $record_id);
+                
+                if ($update_stmt->execute()) {
+                    $success_msg = "Medical record updated successfully!";
+                } else {
+                    $error_msg = "Failed to update medical record. Please try again.";
+                }
+            } else {
+                $error_msg = "Record not found or access denied.";
+            }
+        } else {
+            $error_msg = "Please fill in all required fields.";
+        }
+    }
+    
     // Handle deleting medical record
     if (isset($_POST['delete_record'])) {
         $record_id = (int)$_POST['delete_record'];
         
-        $delete_query = "DELETE FROM medical_records WHERE id = ? AND pet_id = ?";
-        $delete_stmt = $conn->prepare($delete_query);
-        $delete_stmt->bind_param("ii", $record_id, $pet_id);
+        // Verify that this record belongs to the current user's pet
+        $verify_query = "SELECT mr.id FROM medical_records mr 
+                        JOIN pet_profiles p ON mr.pet_id = p.id 
+                        WHERE mr.id = ? AND p.user_id = ?";
+        $verify_stmt = $conn->prepare($verify_query);
+        $verify_stmt->bind_param("ii", $record_id, $user_id);
+        $verify_stmt->execute();
+        $verify_result = $verify_stmt->get_result();
         
-        if ($delete_stmt->execute()) {
-            $success_msg = "Medical record deleted successfully!";
+        if ($verify_result->num_rows > 0) {
+            $delete_query = "DELETE FROM medical_records WHERE id = ?";
+            $delete_stmt = $conn->prepare($delete_query);
+            $delete_stmt->bind_param("i", $record_id);
+            
+            if ($delete_stmt->execute()) {
+                $success_msg = "Medical record deleted successfully!";
+            } else {
+                $error_msg = "Failed to delete medical record.";
+            }
         } else {
-            $error_msg = "Failed to delete medical record.";
+            $error_msg = "Record not found or access denied.";
         }
     }
 }
@@ -620,12 +680,98 @@ include '../includes/header.php';
     </div>
 </div>
 
+<!-- Edit Medical Record Modal -->
+<div class="modal fade" id="editRecordModal" tabindex="-1" aria-labelledby="editRecordModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editRecordModalLabel">
+                    <i class="fas fa-edit me-2"></i>Edit Medical Record
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="post" id="editRecordForm">
+                <div class="modal-body">
+                    <input type="hidden" name="edit_record" value="1">
+                    <input type="hidden" name="record_id" id="edit_record_id">
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="edit_record_type" class="form-label">Record Type *</label>
+                            <select name="edit_record_type" id="edit_record_type" class="form-select" required>
+                                <option value="">Select type</option>
+                                <option value="vaccination">Vaccination</option>
+                                <option value="checkup">Checkup</option>
+                                <option value="treatment">Treatment</option>
+                                <option value="surgery">Surgery</option>
+                                <option value="medication">Medication</option>
+                                <option value="other">Other</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="edit_date_performed" class="form-label">Date Performed *</label>
+                            <input type="date" name="edit_date_performed" id="edit_date_performed" class="form-control" required max="<?php echo date('Y-m-d'); ?>">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_title" class="form-label">Title/Procedure *</label>
+                        <input type="text" name="edit_title" id="edit_title" class="form-control" placeholder="e.g., Annual Vaccination, Rabies Shot" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_description" class="form-label">Description</label>
+                        <textarea name="edit_description" id="edit_description" class="form-control" rows="3" placeholder="Detailed description of the procedure or treatment"></textarea>
+                    </div>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="edit_veterinarian_name" class="form-label">Veterinarian Name</label>
+                            <input type="text" name="edit_veterinarian_name" id="edit_veterinarian_name" class="form-control" placeholder="Dr. Smith">
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="edit_clinic_name" class="form-label">Clinic/Hospital Name</label>
+                            <input type="text" name="edit_clinic_name" id="edit_clinic_name" class="form-control" placeholder="ABC Veterinary Clinic">
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label for="edit_cost" class="form-label">Cost (৳)</label>
+                            <input type="number" name="edit_cost" id="edit_cost" class="form-control" step="0.01" min="0" placeholder="0.00">
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="edit_next_due_date" class="form-label">Next Due Date</label>
+                            <input type="date" name="edit_next_due_date" id="edit_next_due_date" class="form-control" min="<?php echo date('Y-m-d'); ?>">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit_notes" class="form-label">Additional Notes</label>
+                        <textarea name="edit_notes" id="edit_notes" class="form-control" rows="2" placeholder="Any additional notes or observations"></textarea>
+                    </div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Update Record
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Add AOS for animations -->
 <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
 <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
 
 <style>
-/* Medical Records Page Styles */
+/* Medical Records Page Styles - Same as before but with loading indicators */
 .medical-records-page {
     background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
     min-height: 100vh;
@@ -658,6 +804,32 @@ include '../includes/header.php';
     border: none;
     padding: 1rem 1.5rem;
     margin-bottom: 2rem;
+}
+
+/* Loading State */
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+    position: relative;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px;
+    border: 2px solid #e2e8f0;
+    border-top: 2px solid #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
 /* Stats Cards */
@@ -1221,10 +1393,48 @@ function clearFilters() {
     window.location.href = url.toString();
 }
 
-// Edit record function (placeholder)
+// Edit record function - ENHANCED
 function editRecord(recordId) {
-    // This would open an edit modal
-    alert('Edit functionality would be implemented here for record ID: ' + recordId);
+    const modal = new bootstrap.Modal(document.getElementById('editRecordModal'));
+    const form = document.getElementById('editRecordForm');
+    
+    // Add loading state
+    form.classList.add('loading');
+    
+    // Fetch record data
+    fetch(`get_medical_record.php?id=${recordId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const record = data.record;
+                
+                // Populate form fields
+                document.getElementById('edit_record_id').value = record.id;
+                document.getElementById('edit_record_type').value = record.record_type;
+                document.getElementById('edit_title').value = record.title;
+                document.getElementById('edit_description').value = record.description || '';
+                document.getElementById('edit_date_performed').value = record.date_performed;
+                document.getElementById('edit_veterinarian_name').value = record.veterinarian_name || '';
+                document.getElementById('edit_clinic_name').value = record.clinic_name || '';
+                document.getElementById('edit_cost').value = record.cost || '';
+                document.getElementById('edit_next_due_date').value = record.next_due_date || '';
+                document.getElementById('edit_notes').value = record.notes || '';
+                
+                // Remove loading state
+                form.classList.remove('loading');
+                
+                // Show modal
+                modal.show();
+            } else {
+                alert('Error loading record: ' + data.message);
+                form.classList.remove('loading');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading record data');
+            form.classList.remove('loading');
+        });
 }
 
 // Set today's date as default for new records
@@ -1259,6 +1469,61 @@ document.getElementById('record_type').addEventListener('change', function() {
     } else {
         nextDueInput.value = '';
     }
+});
+
+// Auto-fill next due date for edit form
+document.getElementById('edit_record_type').addEventListener('change', function() {
+    const nextDueInput = document.getElementById('edit_next_due_date');
+    const today = new Date();
+    let nextDue = null;
+    
+    switch(this.value) {
+        case 'vaccination':
+            // Annual vaccination
+            nextDue = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
+            break;
+        case 'checkup':
+            // Annual checkup
+            nextDue = new Date(today.getFullYear() + 1, today.getMonth(), today.getDate());
+            break;
+        default:
+            // Don't auto-fill for other types when editing
+            break;
+    }
+    
+    if (nextDue && !nextDueInput.value) {
+        nextDueInput.value = nextDue.toISOString().split('T')[0];
+    }
+});
+
+// Form validation for edit form
+document.getElementById('editRecordForm').addEventListener('submit', function(e) {
+    const requiredFields = ['edit_record_type', 'edit_title', 'edit_date_performed'];
+    let isValid = true;
+    
+    requiredFields.forEach(fieldId => {
+        const field = document.getElementById(fieldId);
+        if (!field.value.trim()) {
+            field.classList.add('is-invalid');
+            isValid = false;
+        } else {
+            field.classList.remove('is-invalid');
+        }
+    });
+    
+    if (!isValid) {
+        e.preventDefault();
+        alert('Please fill in all required fields.');
+    }
+});
+
+// Real-time validation for edit form
+document.querySelectorAll('#editRecordForm [required]').forEach(field => {
+    field.addEventListener('input', function() {
+        if (this.value.trim()) {
+            this.classList.remove('is-invalid');
+        }
+    });
 });
 </script>
 
